@@ -1,0 +1,23 @@
+script_exporter*
+
+.DS_Store
+Thumbs.db
+build
+dist
+
+# Editor directories and files
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw*
+.project
+.classpath
+.settings
+*.bak
+*.sublime-workspace
+.sonar
+.sonarlint
+.sass-cache
