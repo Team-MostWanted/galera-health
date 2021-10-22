@@ -103,7 +103,7 @@ func setup() {
 	log.Debugf("[setup] db host: %s", config.DB.Host)
 	log.Debugf("[setup] db port: %d", config.DB.Port)
 	log.Debugf("[setup] db username: %s", config.DB.Username)
-	log.Debugf("[setup] available when donor: %s", config.AvailableWhenDonor)
+	log.Debugf("[setup] available when donor: %t", config.AvailableWhenDonor)
 }
 
 func readConfig() {
@@ -171,7 +171,7 @@ func checkHealth(db *sql.DB) (bool, string) {
 
 	log.Infof("wsrep_ready: %s", valueReady)
 	log.Infof("wsrep_connected: %s", valueConnected)
-	log.Infof("wsrep_local_state: %s", valueState)
+	log.Infof("wsrep_local_state: %d", valueState)
 
 	if strings.Compare(strings.ToLower(valueOn), "off") == 0 {
 		return true, "not a cluster node"
