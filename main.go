@@ -72,7 +72,7 @@ func init() {
 	flags.dbHost = flag.String("H", "", "database server IP")
 	flags.dbPort = flag.Int("P", 0, "database server port")
 
-	flags.config = flag.String("c", "/etc/galera-health/config.yaml", "yaml config file")
+	flags.config = flag.String("c", "/etc/default/galera-health", "yaml config file")
 	flags.version = flag.Bool("V", false, "show version information")
 }
 
