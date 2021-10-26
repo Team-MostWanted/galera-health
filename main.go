@@ -152,15 +152,28 @@ func checkHealth(db *sql.DB) (bool, string) {
 	errConnected := db.QueryRow("SHOW STATUS LIKE 'wsrep_connected'").Scan(&unused, &valueConnected)
 	errState := db.QueryRow("SHOW STATUS LIKE 'wsrep_local_state'").Scan(&unused, &valueState)
 
-	if errOn == sql.ErrNoRows || errReady == sql.ErrNoRows || errConnected == sql.ErrNoRows {
-		log.Warn("[checkHealth] required variables not set")
+	if errOn == sql.ErrNoRows {
+		log.Warn("[checkHealth] wsrep_on not set")
 		log.Debugf("[checkHealth] errOn: %v", errOn)
-		log.Debugf("[checkHealth] errReady: %v", errReady)
-		log.Debugf("[checkHealth] errConnected: %v", errConnected)
 
-		return false, "required variables not set"
+		return false, "wsrep_on not set"
 	} else if errOn != nil {
 		return handleError(errOn)
+	}
+
+	log.Infof("wsrep_on: %s", valueOn)
+
+	if strings.Compare(strings.ToLower(valueOn), "off") == 0 {
+		return true, "not a cluster node"
+	}
+
+	if errReady == sql.ErrNoRows || errConnected == sql.ErrNoRows || errState == sql.ErrNoRows {
+		log.Warn("[checkHealth] required variables not set")
+		log.Debugf("[checkHealth] errReady: %v", errReady)
+		log.Debugf("[checkHealth] errConnected: %v", errConnected)
+		log.Debugf("[checkHealth] errState: %v", errState)
+
+		return false, "required variables not set"
 	} else if errReady != nil {
 		return handleError(errReady)
 	} else if errConnected != nil {
@@ -172,10 +185,6 @@ func checkHealth(db *sql.DB) (bool, string) {
 	log.Infof("wsrep_ready: %s", valueReady)
 	log.Infof("wsrep_connected: %s", valueConnected)
 	log.Infof("wsrep_local_state: %d", valueState)
-
-	if strings.Compare(strings.ToLower(valueOn), "off") == 0 {
-		return true, "not a cluster node"
-	}
 
 	if strings.Compare(strings.ToLower(valueReady), "off") == 0 {
 		return false, "not ready"
