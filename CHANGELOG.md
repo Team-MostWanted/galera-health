@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Upcoming
 
+## [1.2.0] - 2021-10-25
+- Improved: Logging
+
 ## [1.1.0] - 2021-10-25
 - Fixed: response for non cluster nodes
 
