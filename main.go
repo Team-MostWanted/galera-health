@@ -182,32 +182,43 @@ func checkHealth(db *sql.DB) (bool, string) {
 		return handleError(errState)
 	}
 
-	log.Infof("wsrep_ready: %s", valueReady)
-	log.Infof("wsrep_connected: %s", valueConnected)
-	log.Infof("wsrep_local_state: %d", valueState)
+	log.Debugf("wsrep_ready: %s", valueReady)
+	log.Debugf("wsrep_connected: %s", valueConnected)
+	log.Debugf("wsrep_local_state: %d", valueState)
 
 	if strings.Compare(strings.ToLower(valueReady), "off") == 0 {
+		log.Infof("wsrep_ready: %s", valueReady)
+
 		return false, "not ready"
 	}
 
 	if strings.Compare(strings.ToLower(valueConnected), "off") == 0 {
+		log.Infof("wsrep_connected: %s", valueConnected)
+
 		return false, "not connected"
 	}
 
 	switch valueState {
 	case STATE_JOINING:
+		log.Info("wsrep_local_state: joining")
+
 		return false, "joining"
 	case STATE_DONOR_DESYNCED:
 		if config.AvailableWhenDonor {
 			return true, "donor"
 		}
 
+		log.Info("wsrep_local_state: donor")
 		return false, "donor"
 	case STATE_JOINED:
+		log.Info("wsrep_local_state: joined")
+
 		return false, "joined"
 	case STATE_SYNCED:
 		return true, "synced"
 	default:
+		log.Infof("wsrep_local_state: Unrecognized state: %d", valueState)
+
 		return false, fmt.Sprintf("Unrecognized state: %d", valueState)
 	}
 }
@@ -218,6 +229,8 @@ func handleError(err error) (bool, string) {
 	if strings.Contains(err.Error(), "connection refused") {
 		return false, "connection refused"
 	} else {
+		log.Warnf("[error]]: %s", err.Error())
+
 		return false, err.Error()
 	}
 }
