@@ -97,13 +97,14 @@ func setup() {
 	// parse the flags
 	configFlags()
 
-	log.Debugf("[setup] loaded config:")
-	log.Debugf("[setup] host: %s", config.Host)
-	log.Debugf("[setup] port: %d", config.Port)
-	log.Debugf("[setup] db host: %s", config.DB.Host)
-	log.Debugf("[setup] db port: %d", config.DB.Port)
-	log.Debugf("[setup] db username: %s", config.DB.Username)
-	log.Debugf("[setup] available when donor: %t", config.AvailableWhenDonor)
+	log.WithFields(log.Fields{
+		"host":                 config.Host,
+		"port":                 config.Port,
+		"db host":              config.DB.Host,
+		"db port":              config.DB.Port,
+		"db username":          config.DB.Username,
+		"available when donor": config.AvailableWhenDonor,
+	}).Debug("[setup] config loaded")
 }
 
 func readConfig() {
@@ -161,8 +162,6 @@ func checkHealth(db *sql.DB) (bool, string) {
 		return handleError(errOn)
 	}
 
-	log.Infof("wsrep_on: %s", valueOn)
-
 	if strings.Compare(strings.ToLower(valueOn), "off") == 0 {
 		return true, "not a cluster node"
 	}
@@ -182,38 +181,53 @@ func checkHealth(db *sql.DB) (bool, string) {
 		return handleError(errState)
 	}
 
-	log.Infof("wsrep_ready: %s", valueReady)
-	log.Infof("wsrep_connected: %s", valueConnected)
-	log.Infof("wsrep_local_state: %d", valueState)
+	log.WithFields(log.Fields{
+		"wsrep_on":          valueOn,
+		"wsrep_ready":       valueReady,
+		"wsrep_connected":   valueConnected,
+		"wsrep_local_state": valueState,
+	}).Debug("wsrep status")
 
 	if strings.Compare(strings.ToLower(valueReady), "off") == 0 {
+		log.Infof("wsrep_ready: %s", valueReady)
+
 		return false, "not ready"
 	}
 
 	if strings.Compare(strings.ToLower(valueConnected), "off") == 0 {
+		log.Infof("wsrep_connected: %s", valueConnected)
+
 		return false, "not connected"
 	}
 
 	switch valueState {
 	case STATE_JOINING:
+		log.Info("wsrep_local_state: joining")
+
 		return false, "joining"
 	case STATE_DONOR_DESYNCED:
 		if config.AvailableWhenDonor {
 			return true, "donor"
 		}
 
+		log.Info("wsrep_local_state: donor")
+
 		return false, "donor"
 	case STATE_JOINED:
+		log.Info("wsrep_local_state: joined")
+
 		return false, "joined"
 	case STATE_SYNCED:
 		return true, "synced"
 	default:
+		log.Infof("wsrep_local_state: Unrecognized state: %d", valueState)
+
 		return false, fmt.Sprintf("Unrecognized state: %d", valueState)
 	}
 }
 
 func handleError(err error) (bool, string) {
-	log.Warnf("[query error] %s", err.Error())
+	log.Errorf("[query error] %s", err.Error())
 
 	if strings.Contains(err.Error(), "connection refused") {
 		return false, "connection refused"
