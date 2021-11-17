@@ -44,8 +44,6 @@ var flags struct {
 	verbose *bool
 	host    *string
 	port    *int
-	dbHost  *string
-	dbPort  *int
 	config  *string
 	version *bool
 }
@@ -68,9 +66,6 @@ func init() {
 	flags.verbose = flag.Bool("v", false, "show verbose output")
 	flags.host = flag.String("h", "", "IP used for listening, leave empty for all available IP addresses")
 	flags.port = flag.Int("p", 33060, "port used for listening")
-
-	flags.dbHost = flag.String("H", "", "database server IP")
-	flags.dbPort = flag.Int("P", 0, "database server port")
 
 	flags.config = flag.String("c", "/etc/default/galera-health", "yaml config file")
 	flags.version = flag.Bool("V", false, "show version information")
@@ -130,14 +125,6 @@ func configFlags() {
 
 	if flags.port != nil || *flags.port == 0 {
 		config.Port = *flags.port
-	}
-
-	if flags.dbHost != nil && *flags.dbHost != "" {
-		config.DB.Host = *flags.dbHost
-	}
-
-	if flags.dbPort != nil && *flags.dbPort != 0 {
-		config.DB.Port = *flags.dbPort
 	}
 }
 
