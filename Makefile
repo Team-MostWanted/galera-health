@@ -27,6 +27,14 @@ ARCH	:= $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
 .PHONY: all
 all: test build
 
+.PHONY: update-dependencies
+update-dependencies:
+	$(GO) get -u
+	$(GO) mod tidy
+
+.PHONY: update
+update: clean update-dependencies test build
+
 .PHONY: build
 build:
 	$(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-$(OS)-$(ARCH)/$(APPNAME) -v ./...

@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Upcoming
 
+## [1.3.0] - 2022-04-21
+- Added: make update
+- Improved: Security updates
+
 ## [1.2.1] - 2021-11-17
 - Added: Travis CI build and deploy
 - Added: README.md
