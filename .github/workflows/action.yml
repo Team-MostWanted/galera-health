@@ -2,7 +2,7 @@ name: build tar files and publish to releases
 
 on:
   push:
-    branches: [ master ]
+    branches: [ feature/github-actions ]
 
 jobs:
   build:
@@ -27,12 +27,12 @@ jobs:
 
     - name: create the release
       id: create-new-release
-      uses: actions/create-release@v1
+      uses: elgohr/Github-Release-Action@v4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
-        release_name: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
+        title: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
+        # release_name: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
     
     - name: upload release assets windows
       uses: actions/upload-release-asset@v1
@@ -73,6 +73,4 @@ jobs:
         asset_path:  ./dist/galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
         asset_name: galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
         asset_content_type: application/zip
-
-
-
+        
