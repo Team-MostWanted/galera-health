@@ -27,12 +27,11 @@ jobs:
 
     - name: create the release
       id: create-new-release
-      uses: elgohr/Github-Release-Action@v4
-      env:
-        GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      uses: "marvinpinto/action-automatic-releases@latest"
       with:
+        repo_token: ${{ secrets.RELEASE_TOKEN }}
+        automatic_release_tag: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
         title: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
-        # release_name: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
     
     - name: upload release assets windows
       uses: actions/upload-release-asset@v1
