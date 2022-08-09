@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Upcoming
 
+## [1.4.1] - 2022-08-09
+- Added: workflow for automatic release
+- fixed: removed spaces in workflow
+
 ## [1.4.0] - 2022-07-11
 - Improved: Security updates
 

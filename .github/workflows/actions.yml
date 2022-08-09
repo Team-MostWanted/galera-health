@@ -40,7 +40,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path:  ./dist/galera-health-${{ steps.getversion.outputs.version }}-windows-amd64.tar.gz
+        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-windows-amd64.tar.gz
         asset_name: galera-health-${{ steps.getversion.outputs.version }}-windows-amd64.tar.gz
         asset_content_type: application/zip
 
@@ -50,7 +50,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path:  ./dist/galera-health-${{ steps.getversion.outputs.version }}-linux-amd64.tar.gz
+        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-linux-amd64.tar.gz
         asset_name: galera-health-${{ steps.getversion.outputs.version }}-linux-amd64.tar.gz
         asset_content_type: application/zip
 
@@ -60,7 +60,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path:  ./dist/galera-health-${{ steps.getversion.outputs.version }}-darwin-amd64.tar.gz
+        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-darwin-amd64.tar.gz
         asset_name: galera-health-${{ steps.getversion.outputs.version }}-darwin-amd64.tar.gz
         asset_content_type: application/zip
 
@@ -70,6 +70,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path:  ./dist/galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
+        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
         asset_name: galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
         asset_content_type: application/zip
