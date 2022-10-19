@@ -6,6 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Upcoming
 
+## [1.5.0] - 2022-10-19
+- Added: makefile support for update dependencies
+- Added: makefile support for MacOs M1
+- Changed: changed release steps to use recommended repo as stated in https://github.com/actions/upload-release-asset#readme
+- Security: updated dependencies
+
 ## [1.4.1] - 2022-08-09
 - Added: workflow for automatic release
 - fixed: removed spaces in workflow

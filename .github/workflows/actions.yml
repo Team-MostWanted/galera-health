@@ -18,6 +18,10 @@ jobs:
     - name: checkout repo
       uses: actions/checkout@v2
 
+    - name: Extract release notes
+      id: extract-release-notes
+      uses: ffurrer2/extract-release-notes@v1
+
     - name: read version file
       id: getversion
       run: echo "::set-output name=version::$(cat VERSION)"
@@ -26,50 +30,10 @@ jobs:
       run: make dist
 
     - name: create the release
-      id: create-new-release
-      uses: "marvinpinto/action-automatic-releases@latest"
+      uses: softprops/action-gh-release@v1
       with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
         prerelease: false
-        automatic_release_tag: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
-        title: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
-
-    - name: upload release assets windows
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-windows-amd64.tar.gz
-        asset_name: galera-health-${{ steps.getversion.outputs.version }}-windows-amd64.tar.gz
-        asset_content_type: application/zip
-
-    - name: upload release assets linux
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-linux-amd64.tar.gz
-        asset_name: galera-health-${{ steps.getversion.outputs.version }}-linux-amd64.tar.gz
-        asset_content_type: application/zip
-
-    - name: upload release assets darwin
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-darwin-amd64.tar.gz
-        asset_name: galera-health-${{ steps.getversion.outputs.version }}-darwin-amd64.tar.gz
-        asset_content_type: application/zip
-
-    - name: upload release assets freebsd
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create-new-release.outputs.upload_url }}
-        asset_path: ./dist/galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
-        asset_name: galera-health-${{ steps.getversion.outputs.version }}-freebsd-amd64.tar.gz
-        asset_content_type: application/zip
+        tag_name: ${{ steps.getversion.outputs.version }}+${{ github.run_number }}
+        body: ${{ steps.extract-release-notes.outputs.release_notes }}
+        files: ./dist/*.tar.gz
+        fail_on_unmatched_files: true
