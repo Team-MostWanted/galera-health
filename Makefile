@@ -52,13 +52,15 @@ clean:
 .PHONY: compile
 compile:
 	# FreeBDS
-	GOOS=freebsd GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64/$(APPNAME) -v ./...
+	GOOS=freebsd GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64/$(APPNAME) -v ./...
 	# MacOS
-	GOOS=darwin GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64/$(APPNAME) -v ./...
+	GOOS=darwin GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64/$(APPNAME) -v ./...
+	# MacOS M1
+	GOOS=darwin GOARCH=arm64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64/$(APPNAME) -v ./...
 	# Linux
-	GOOS=linux GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64/$(APPNAME)  -v ./...
+	GOOS=linux GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64/$(APPNAME)  -v ./...
 	# Windows
-	GOOS=windows GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-windows-amd64/$(APPNAME)  -v ./...
+	GOOS=windows GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-windows-amd64/$(APPNAME).exe  -v ./...
 
 .PHONY: dist
 dist: clean compile
@@ -71,6 +73,10 @@ dist: clean compile
 	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar $(APPNAME)-$(VERSION)-darwin-amd64
 	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar
 	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar.gz
+
+	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar $(APPNAME)-$(VERSION)-darwin-arm64
+	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar
+	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar.gz
 
 	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64.tar $(APPNAME)-$(VERSION)-linux-amd64
 	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64.tar
