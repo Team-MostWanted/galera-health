@@ -1,11 +1,11 @@
 module mostwanted.io/galera-health
 
-go 1.18
+go 1.20
 
 require (
-	github.com/go-sql-driver/mysql v1.7.0
-	github.com/sirupsen/logrus v1.9.0
+	github.com/go-sql-driver/mysql v1.7.1
+	github.com/sirupsen/logrus v1.9.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require golang.org/x/sys v0.4.0 // indirect
+require golang.org/x/sys v0.10.0 // indirect
