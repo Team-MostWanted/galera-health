@@ -122,20 +122,39 @@ The maintainers
 
 ### Building
 
-To create a working binary for your operating system use `make`
+To create a working binary use:
+
+```
+git clone git@github.com:Team-MostWanted/galera-health.git
+cd galera-health
+make
+```
 
 This creates a binary in the `./build` folder. Look at the [Build options section](#Build%20options) for more build options.
 
-#### Build options
+#### Make options
 
-target  | description
---------|------------
-all     | execute `test` and `build` target
-build   | use `go build` to create binary for current GOARCH and GOOS in `./build`
-test    | use `go test` to execute the unit test and create a coverage report `./build/test-coverage.out`
-clean   | clean the build directory
-compile | build the binaries for FreeBDS, Linux, MacOS, and Windows in `./build`
-dist    | execute `clean` and `compile` targets, and create tar.gz files in `./dist`
+The targets used by default are:
+- freebsd/amd64
+- darwin/amd64
+- darwin/arm64
+- linux/amd64
+- linux/arm64
+- windows/amd64
+
+Use `make <command> TARGETS=<os>/<arch>` to execute make with your own OS and Architecture, e.g. `make build TARGETS=freebsd/arm64`.
+
+target      | description
+------------|------------
+version     | retrieve and display the version from the [CHANGELOG.md](CHANGELOG.md)
+test        | use `go test` to execute the unit test and create a coverage report `./build/test-coverage.out`
+build       | build the binary for every OS and Arch stated
+dist-check  | validations performed to see if the codebase is ready for a release, on default this will skipped unless performed on the acceptance or master branch
+dist-create | create tar.gz files in `./dist` for all targets using the binaries from `./build`
+dist        | perform a clean, dist-check build and dist-create
+update-dependencies | update go version and update dependencies, makes sure everything is tiday, and add a line to the changelog
+update      | perform a clean, update-dependencies and a test
+clean       | clean the build and dist directories
 
 ### TODO
 
