@@ -1,87 +1,131 @@
 GO			?= go
 GOOPTS		?=
-
-pkgs	 	= ./...
+GOFMT		?= gofmt
+STATICCHECK	?= staticcheck
+PACKAGES	?= ./...
+CHANGELOG	?= CHANGELOG.md
 
 BIN_DIR		?= ./bin
 BUILD_DIR	?= ./build
 DIST_DIR	?= ./dist
-APPNAME		?= galera-health
-VERSION		?= $(shell cat ./VERSION 2> /dev/null)
+
+APPNAME		?= $(shell perl -ne 'if (/^module /) { s/^module .+\///; print; }' go.mod)
+VERSION		?= $(shell perl -lne 'if (/^\#\# \[\d+\.\d+\.\d+\] - [^\[A-Za-z]/) { print substr((split(/\s+/))[1], 1, -1); last; }' $(CHANGELOG))
 COMMIT		?= $(shell git rev-parse --verify HEAD)
 DATE		:= $(shell date +%FT%T%z)
+TARGETS		:= freebsd/amd64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64
 
-GOPATH		?= $(shell go env GOPATH)
 GO_LDFLAGS	+= -X main.name=$(APPNAME)
 GO_LDFLAGS	+= -X main.version=v$(VERSION)
 GO_LDFLAGS	+= -X main.commit=$(COMMIT)
 GO_LDFLAGS	+= -X main.date=$(DATE)
 # strip debug info from binary
-GO_LDFLAGS += -s -w
+GO_LDFLAGS 	+= -s -w
 
-GO_LDFLAGS := -ldflags="$(GO_LDFLAGS)"
+GO_LDFLAGS 	:= -ldflags="$(GO_LDFLAGS)"
 
-OS		:= $(if $(GOOS),$(GOOS),$(shell go env GOOS))
-ARCH	:= $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
+VERSION_NEXT 	?= $(shell echo $(word 1, $(subst ., ,$(VERSION))).$$(($(word 2, $(subst ., ,$(VERSION))) + 1)).0)
+CHANGELOG_LINE	?= - Security: dependency and security updates
 
-.PHONY: all
-all: test build
+ifeq (,$(shell sed -nE '/\#\# .*(upcoming|unreleased)/Ip' $(CHANGELOG)))
+	CHANGELOG_LINES ?= \#\# \[$(VERSION_NEXT)\] - $(shell date +%F)\n$(CHANGELOG_LINE)\n\n
+else
+	CHANGELOG_LINES ?= $(CHANGELOG_LINE)\n\n
+endif
 
-.PHONY: update-dependencies
-update-dependencies:
-	$(GO) get -u
-	$(GO) mod tidy
-
-.PHONY: update
-update: clean update-dependencies test build
-
-.PHONY: build
-build:
-	$(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-$(OS)-$(ARCH)/$(APPNAME) -v ./...
+.PHONY: version
+version:
+	@echo "$(VERSION)"
 
 .PHONY: test
 test:
+	@echo "Start test for: $(APPNAME) v$(VERSION)"
+
+	test -z "$$($(GOFMT) -l .)" # Check Code is formatted correctly
+	$(GO) mod verify # ensure that go.sum agrees with what's in the module cache
+	$(GO) vet $(PACKAGES) # examines Go source code and reports suspicious constructs
+
+ifneq (,$(shell which $(STATICCHECK)))
+	$(STATICCHECK) $(PACKAGES) # extensive analysis of Go code
+endif
+
 	mkdir -p $(BUILD_DIR)
-	$(GO) test -v -race -coverprofile=$(BUILD_DIR)/test-coverage.out $(pkgs)
+	# run unit test with coverage
+	$(GO) test -race -coverprofile=$(BUILD_DIR)/test-coverage.out -json $(PACKAGES) > $(BUILD_DIR)/test-report-unit.json
+	# run benchmark test once to make sure they work
+	$(GO) test -run=- -bench=. -benchtime=1x -json $(PACKAGES) > $(BUILD_DIR)/test-report-benchmark.json
+
+.PHONY: build
+build:
+	@echo "Start build for: $(APPNAME) v$(VERSION)"
+
+	@if grep -q "package main" *.go 2>/dev/null ; then \
+		mkdir -p $(BUILD_DIR); \
+		for target in $(TARGETS); do \
+			os=$$(echo $$target | cut -d/ -f1); \
+			arch=$$(echo $$target | cut -d/ -f2); \
+			CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-$$os-$$arch/ $(PACKAGES); \
+		done; \
+	else \
+		echo "No building required, module does not contain the 'main' package."; \
+    fi
+
+.PHONY: dist-check
+dist-check:
+ifneq (,$(filter ${GITHUB_REF\#refs/heads/},release/acceptance master))
+	@echo "Performing dist check for: ${GITHUB_REF\#refs/heads/}"
+
+	@if ! test -z "$$(sed -E -n '/(upcoming|unreleased)/I,/##/p' changelog.md | sed '1d;$$d' | sed 's/[[:space:]-]//g')"; then \
+		echo "Error: cannot generate dist, changelog.md must not contain unreleased lines."; \
+		exit 1; \
+	fi
+
+	# Check for changes in go.mod or go.sum
+	@mkdir -p $(BUILD_DIR)
+	@cp go.mod $(BUILD_DIR)/go.mod.chk
+	@cp go.sum $(BUILD_DIR)/go.sum.chk
+
+	test -z $$($(GO) mod tidy)
+
+	diff go.mod $(BUILD_DIR)/go.mod.chk
+	diff go.sum $(BUILD_DIR)/go.sum.chk
+
+	@rm $(BUILD_DIR)/go.mod.chk $(BUILD_DIR)/go.sum.chk
+else
+	@echo "Skipping dist check."
+endif
+
+.PHONY: dist-create
+dist-create:
+	@echo "Create dist for: $(APPNAME) v$(VERSION)"
+
+	@if grep -q "package main" *.go 2>/dev/null ; then \
+		mkdir -p $(DIST_DIR); \
+		for target in $(TARGETS); do \
+			os=$$(echo $$target | cut -d/ -f1); \
+			arch=$$(echo $$target | cut -d/ -f2); \
+			tar -C $(BUILD_DIR) -cvzf $(DIST_DIR)/$(APPNAME)-$(VERSION)-$$os-$$arch.tar.gz $(APPNAME)-$(VERSION)-$$os-$$arch; \
+		done; \
+	fi
+
+.PHONY: dist
+dist: clean dist-check build dist-create
+
+.PHONY: update-dependencies
+update-dependencies:
+	$(GO) get go@latest
+	# Remove patch level of GO version
+	@sed -i "" -E 's/(go [0-9]+\.[0-9]+)\.[0-9]+/\1/' go.mod
+	$(GO) get -t -u $(PACKAGES)
+	$(GO) mod tidy
+
+	# Adding lines to changelog
+	@sed -i "" -e 's/\(## \[$(VERSION)\]\)/$(CHANGELOG_LINES)\1/' $(CHANGELOG)
+
+.PHONY: update
+update: clean update-dependencies test
 
 .PHONY: clean
 clean:
 	$(GO) clean
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
-
-.PHONY: compile
-compile:
-	# FreeBDS
-	GOOS=freebsd GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64/$(APPNAME) -v ./...
-	# MacOS
-	GOOS=darwin GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64/$(APPNAME) -v ./...
-	# MacOS M1
-	GOOS=darwin GOARCH=arm64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64/$(APPNAME) -v ./...
-	# Linux
-	GOOS=linux GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64/$(APPNAME)  -v ./...
-	# Windows
-	GOOS=windows GOARCH=amd64 $(GO) build $(GO_LDFLAGS) -o $(BUILD_DIR)/$(APPNAME)-$(VERSION)-windows-amd64/$(APPNAME).exe  -v ./...
-
-.PHONY: dist
-dist: clean compile
-	mkdir -p $(DIST_DIR)
-
-	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64.tar $(APPNAME)-$(VERSION)-freebsd-amd64
-	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64.tar
-	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-freebsd-amd64.tar.gz
-
-	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar $(APPNAME)-$(VERSION)-darwin-amd64
-	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar
-	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-darwin-amd64.tar.gz
-
-	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar $(APPNAME)-$(VERSION)-darwin-arm64
-	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar
-	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-darwin-arm64.tar.gz
-
-	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64.tar $(APPNAME)-$(VERSION)-linux-amd64
-	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64.tar
-	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-linux-amd64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-linux-amd64.tar.gz
-
-	tar -C $(BUILD_DIR) -cvf $(BUILD_DIR)/$(APPNAME)-$(VERSION)-windows-amd64.tar $(APPNAME)-$(VERSION)-windows-amd64
-	gzip $(BUILD_DIR)/$(APPNAME)-$(VERSION)-windows-amd64.tar
-	mv $(BUILD_DIR)/$(APPNAME)-$(VERSION)-windows-amd64.tar.gz $(DIST_DIR)/$(APPNAME)-$(VERSION)-windows-amd64.tar.gz

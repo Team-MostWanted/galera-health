@@ -1,0 +1,43 @@
+name: Security Updates Workflow
+
+on:
+  schedule:
+    - cron: '0 12 1-7 1,4,7,10 1' # first monday every January, April, July and October
+  workflow_dispatch:
+
+jobs:
+  security_updates:
+    name: Run dependency updates and create PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine current year and quarter
+        id: vars
+        run: |
+          YEAR=$(date +%Y)
+          QUARTER=$(( ($(date +%-m)-1)/3+1 ))
+
+          echo "year=$YEAR" >> $GITHUB_OUTPUT
+          echo "quarter=$QUARTER" >> $GITHUB_OUTPUT
+          echo "year_quarter=${YEAR}Q${QUARTER}" >> $GITHUB_OUTPUT
+
+      - name: Execute make update
+        run: make update
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update dependencies for ${{ steps.vars.outputs.year_quarter }}"
+          title: "Security Updates ${{ steps.vars.outputs.year_quarter }}"
+          body: "Automated pull request created by GitHub Actions."
+          branch: "feature/security-updates-${{ steps.vars.outputs.year_quarter }}"
+          delete-branch: true
+          reviewers: |
+            rtuk
+            TheM1984
+            Lveltmaat
+          draft: false
