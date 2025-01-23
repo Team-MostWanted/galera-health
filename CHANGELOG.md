@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) with the minor change that we use a prefix instead of grouping.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2025-01-23
+- Security: dependency and security updates
+
 ## [1.12.0] - 2024-10-10
 - Security: dependency and security updates
 
