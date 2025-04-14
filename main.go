@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
@@ -18,6 +22,7 @@ var name = "galera-health"
 var version = "v0.0.1"
 var commit = "development"
 var date = "0001-01-01T00:00:00.000Z"
+var dbPool *sql.DB
 
 var config = &Config{
 	Host: "",
@@ -84,12 +89,13 @@ func setup() {
 		os.Exit(0)
 	}
 
-	// parse the configuration files
+	// Parse the configuration files
 	readConfig()
 
-	// parse the flags
+	// Parse the flags
 	configFlags()
 
+	// Setup logging
 	log.WithFields(log.Fields{
 		"host":                 config.Host,
 		"port":                 config.Port,
@@ -98,11 +104,42 @@ func setup() {
 		"db username":          config.DB.Username,
 		"available when donor": config.AvailableWhenDonor,
 	}).Debug("[setup] config loaded")
+
+	// Initialize DB connection pool
+	initDBPool()
+}
+
+func initDBPool() {
+	connectionString := fmt.Sprintf(
+		"%s:%s@tcp(%s:%d)/",
+		config.DB.Username,
+		config.DB.Password,
+		config.DB.Host,
+		config.DB.Port,
+	)
+
+	// Initialise the database connection
+	var err error
+	dbPool, err = sql.Open("mysql", connectionString)
+	if err != nil {
+		log.Fatalf("Failed to initialize database connection pool: %v", err)
+	}
+
+	// Set database connection pool parameters
+	dbPool.SetMaxOpenConns(10)
+	dbPool.SetMaxIdleConns(5)
+	dbPool.SetConnMaxLifetime(time.Minute * 3)
+
+	// Test database connection with ping
+	if err = dbPool.Ping(); err != nil {
+		log.Warnf("Could not connect to database: %v", err)
+	}
 }
 
 func readConfig() {
 	log.Debugf("[readConfig] parsing config file: %s", *flags.config)
 
+	// Load YAML config file
 	yamlFile, err := os.ReadFile(*flags.config)
 	if err != nil {
 		log.Fatalf("Could not load config file: %v", err)
@@ -126,44 +163,73 @@ func configFlags() {
 	}
 }
 
-func checkHealth(db *sql.DB) (bool, string) {
+func queryStatus(db *sql.DB, query string) (string, error) {
+	var unused, value string
+	err := db.QueryRow(query).Scan(&unused, &value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("variable not found: %s", query)
+	}
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func queryStateInt(db *sql.DB, query string) (int, error) {
 	var unused string
-	var valueOn string
-	var valueReady string
-	var valueConnected string
-	var valueState int
+	var value int
+	err := db.QueryRow(query).Scan(&unused, &value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("variable not found: %s", query)
+	}
+	if err != nil {
+		return 0, err
+	}
+	return value, nil
+}
 
-	errOn := db.QueryRow("SHOW VARIABLES LIKE 'wsrep_on'").Scan(&unused, &valueOn)
-	errReady := db.QueryRow("SHOW STATUS LIKE 'wsrep_ready'").Scan(&unused, &valueReady)
-	errConnected := db.QueryRow("SHOW STATUS LIKE 'wsrep_connected'").Scan(&unused, &valueConnected)
-	errState := db.QueryRow("SHOW STATUS LIKE 'wsrep_local_state'").Scan(&unused, &valueState)
-
-	if errors.Is(errOn, sql.ErrNoRows) {
-		log.Warn("[checkHealth] wsrep_on not set")
-		log.Debugf("[checkHealth] errOn: %v", errOn)
-
-		return false, "wsrep_on not set"
-	} else if errOn != nil {
-		return handleError(errOn)
+func checkHealth(db *sql.DB) (bool, string) {
+	// Check if galera is enabled
+	valueOn, err := queryStatus(db, "SHOW VARIABLES LIKE 'wsrep_on'")
+	if err != nil {
+		if strings.Contains(err.Error(), "variable not found") {
+			log.Warn("[checkHealth] wsrep_on not set")
+			return false, "wsrep_on not set"
+		}
+		return handleError(err)
 	}
 
-	if strings.Compare(strings.ToLower(valueOn), "off") == 0 {
+	// If not a cluster node, it's considered healthy
+	if strings.ToLower(valueOn) == "off" {
 		return true, "not a cluster node"
 	}
 
-	if errors.Is(errReady, sql.ErrNoRows) || errors.Is(errConnected, sql.ErrNoRows) || errors.Is(errState, sql.ErrNoRows) {
-		log.Warn("[checkHealth] required variables not set")
-		log.Debugf("[checkHealth] errReady: %v", errReady)
-		log.Debugf("[checkHealth] errConnected: %v", errConnected)
-		log.Debugf("[checkHealth] errState: %v", errState)
+	// Check cluster status variables
+	valueReady, err := queryStatus(db, "SHOW STATUS LIKE 'wsrep_ready'")
+	if err != nil {
+		if strings.Contains(err.Error(), "variable not found") {
+			log.Warn("[checkHealth] wsrep_ready not set")
+			return false, "wsrep_ready not set"
+		}
+		return handleError(err)
+	}
 
-		return false, "required variables not set"
-	} else if errReady != nil {
-		return handleError(errReady)
-	} else if errConnected != nil {
-		return handleError(errConnected)
-	} else if errState != nil {
-		return handleError(errState)
+	valueConnected, err := queryStatus(db, "SHOW STATUS LIKE 'wsrep_connected'")
+	if err != nil {
+		if strings.Contains(err.Error(), "variable not found") {
+			log.Warn("[checkHealth] wsrep_connected not set")
+			return false, "wsrep_connected not set"
+		}
+		return handleError(err)
+	}
+
+	valueState, err := queryStateInt(db, "SHOW STATUS LIKE 'wsrep_local_state'")
+	if err != nil {
+		if strings.Contains(err.Error(), "variable not found") {
+			log.Warn("[checkHealth] wsrep_local_state not set")
+			return false, "wsrep_local_state not set"
+		}
+		return handleError(err)
 	}
 
 	log.WithFields(log.Fields{
@@ -173,41 +239,38 @@ func checkHealth(db *sql.DB) (bool, string) {
 		"wsrep_local_state": valueState,
 	}).Debug("wsrep status")
 
-	if strings.Compare(strings.ToLower(valueReady), "off") == 0 {
-		log.Infof("wsrep_ready: %s", valueReady)
-
+	// Check if node is ready
+	if strings.ToLower(valueReady) == "off" {
+		log.Info("wsrep_ready: off")
 		return false, "not ready"
 	}
 
-	if strings.Compare(strings.ToLower(valueConnected), "off") == 0 {
-		log.Infof("wsrep_connected: %s", valueConnected)
-
+	// Check if node is connected to cluster
+	if strings.ToLower(valueConnected) == "off" {
+		log.Info("wsrep_connected: off")
 		return false, "not connected"
 	}
 
+	// Check node state
 	switch valueState {
 	case STATE_JOINING:
 		log.Info("wsrep_local_state: joining")
-
 		return false, "joining"
 	case STATE_DONOR_DESYNCED:
+		log.Info("wsrep_local_state: donor")
 		if config.AvailableWhenDonor {
 			return true, "donor"
 		}
-
-		log.Info("wsrep_local_state: donor")
-
 		return false, "donor"
 	case STATE_JOINED:
 		log.Info("wsrep_local_state: joined")
-
 		return false, "joined"
 	case STATE_SYNCED:
+		log.Debug("wsrep_local_state: synced")
 		return true, "synced"
 	default:
-		log.Infof("wsrep_local_state: Unrecognized state: %d", valueState)
-
-		return false, fmt.Sprintf("Unrecognized state: %d", valueState)
+		log.Warnf("wsrep_local_state: Unrecognized state: %d", valueState)
+		return false, fmt.Sprintf("unrecognized state: %d", valueState)
 	}
 }
 
@@ -216,71 +279,89 @@ func handleError(err error) (bool, string) {
 
 	if strings.Contains(err.Error(), "connection refused") {
 		return false, "connection refused"
-	} else {
-		return false, err.Error()
 	}
+	return false, err.Error()
 }
 
 func healthcheck(w http.ResponseWriter, _ *http.Request) {
-	var connectionString = fmt.Sprintf(
-		"%s:%s@tcp(%s:%d)/",
-		config.DB.Username,
-		config.DB.Password,
-		config.DB.Host,
-		config.DB.Port,
-	)
-
-	db, err := sql.Open(
-		"mysql",
-		connectionString,
-	)
-
 	var statusCode int
-	var responseBody string
+	var message string
 
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			log.Fatalf("[healthcheck] close db connection error: %v", err)
-		}
-	}(db)
-
-	if err != nil {
+	// Check database connection
+	if err := dbPool.Ping(); err != nil {
+		log.Errorf("Database connection error: %v", err)
 		statusCode = http.StatusServiceUnavailable
-		responseBody = err.Error()
+		message = "database connection error"
 	} else {
-		healthy, message := checkHealth(db)
+		// Check cluster health
+		healthy, healthMessage := checkHealth(dbPool)
+		message = healthMessage
 
 		if healthy {
 			statusCode = http.StatusOK
-			responseBody = message
 		} else {
 			statusCode = http.StatusServiceUnavailable
-			responseBody = message
 		}
 	}
 
-	log.Debugf("statusCode: %d", statusCode)
-	log.Debugf("responseBody: %s", responseBody)
+	// Log health check response
+	log.WithFields(log.Fields{
+		"statusCode": statusCode,
+		"message":    message,
+	}).Debug("Health check response")
 
 	w.WriteHeader(statusCode)
-	_, err = w.Write([]byte(responseBody))
-	if err != nil {
-		return
+	if _, err := w.Write([]byte(message)); err != nil {
+		log.Errorf("Failed to write response: %v", err)
 	}
 }
 
 func main() {
 	setup()
 
+	// Configure HTTP server with timeouts
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-
-	log.Info("Started on ", addr)
-
-	http.HandleFunc("/", healthcheck)
-	err := http.ListenAndServe(addr, nil)
-
-	if err != nil {
-		log.Fatalf("Could not start server: %v", err)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      http.DefaultServeMux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	// Register handler
+	http.HandleFunc("/", healthcheck)
+
+	// Start server in a goroutine
+	go func() {
+		log.Info("Started on ", addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Could not start server: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	log.Info("Shutting down server...")
+
+	// Create a deadline for the shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// Close database connection pool
+	if dbPool != nil {
+		if err := dbPool.Close(); err != nil {
+			log.Errorf("Error closing database connection pool: %v", err)
+		}
+	}
+
+	// Gracefully shutdown the server
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Info("Server gracefully stopped")
 }
