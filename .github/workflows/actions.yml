@@ -30,7 +30,7 @@ jobs:
 
     - name: Compress binaries with UPX
       run: |
-          find ./dist -type f -executable -o -name "*.exe" | xargs -I{} upx --best {}
+          upx --best ./dist/galera-health
 
     - name: create the release
       uses: softprops/action-gh-release@v1
