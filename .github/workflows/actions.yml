@@ -30,7 +30,7 @@ jobs:
 
     - name: Compress binaries with UPX
       run: |
-          upx --best ./dist/galera-health
+          upx --best ./dist/*/galera-health
 
     - name: create the release
       uses: softprops/action-gh-release@v1
