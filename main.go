@@ -4,9 +4,9 @@ import (
 	// "database/sql"
 
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -105,7 +105,7 @@ func setup() {
 func readConfig() {
 	log.Debugf("[readConfig] parsing config file: %s", *flags.config)
 
-	yamlFile, err := ioutil.ReadFile(*flags.config)
+	yamlFile, err := os.ReadFile(*flags.config)
 	if err != nil {
 		log.Fatalf("Could not load config file: %v", err)
 	}
@@ -140,7 +140,7 @@ func checkHealth(db *sql.DB) (bool, string) {
 	errConnected := db.QueryRow("SHOW STATUS LIKE 'wsrep_connected'").Scan(&unused, &valueConnected)
 	errState := db.QueryRow("SHOW STATUS LIKE 'wsrep_local_state'").Scan(&unused, &valueState)
 
-	if errOn == sql.ErrNoRows {
+	if errors.Is(errOn, sql.ErrNoRows) {
 		log.Warn("[checkHealth] wsrep_on not set")
 		log.Debugf("[checkHealth] errOn: %v", errOn)
 
@@ -153,7 +153,7 @@ func checkHealth(db *sql.DB) (bool, string) {
 		return true, "not a cluster node"
 	}
 
-	if errReady == sql.ErrNoRows || errConnected == sql.ErrNoRows || errState == sql.ErrNoRows {
+	if errors.Is(errReady, sql.ErrNoRows) || errors.Is(errConnected, sql.ErrNoRows) || errors.Is(errState, sql.ErrNoRows) {
 		log.Warn("[checkHealth] required variables not set")
 		log.Debugf("[checkHealth] errReady: %v", errReady)
 		log.Debugf("[checkHealth] errConnected: %v", errConnected)
@@ -223,7 +223,7 @@ func handleError(err error) (bool, string) {
 	}
 }
 
-func healthcheck(w http.ResponseWriter, r *http.Request) {
+func healthcheck(w http.ResponseWriter, _ *http.Request) {
 	var connectionString = fmt.Sprintf(
 		"%s:%s@tcp(%s:%d)/",
 		config.DB.Username,
@@ -240,7 +240,12 @@ func healthcheck(w http.ResponseWriter, r *http.Request) {
 	var statusCode int
 	var responseBody string
 
-	defer db.Close()
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+
+		}
+	}(db)
 
 	if err != nil {
 		statusCode = http.StatusServiceUnavailable
@@ -261,7 +266,10 @@ func healthcheck(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("responseBody: %s", responseBody)
 
 	w.WriteHeader(statusCode)
-	w.Write([]byte(responseBody))
+	_, err = w.Write([]byte(responseBody))
+	if err != nil {
+		return
+	}
 }
 
 func main() {
