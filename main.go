@@ -1,8 +1,6 @@
 package main
 
 import (
-	// "database/sql"
-
 	"database/sql"
 	"errors"
 	"flag"
@@ -123,7 +121,7 @@ func configFlags() {
 		config.Host = *flags.host
 	}
 
-	if flags.port != nil || *flags.port == 0 {
+	if flags.port != nil && *flags.port != 0 {
 		config.Port = *flags.port
 	}
 }
@@ -243,7 +241,7 @@ func healthcheck(w http.ResponseWriter, _ *http.Request) {
 	defer func(db *sql.DB) {
 		err := db.Close()
 		if err != nil {
-
+			log.Fatalf("[healthcheck] close db connection error: %v", err)
 		}
 	}(db)
 
