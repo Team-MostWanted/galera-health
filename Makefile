@@ -104,6 +104,7 @@ dist-create:
 		for target in $(TARGETS); do \
 			os=$$(echo $$target | cut -d/ -f1); \
 			arch=$$(echo $$target | cut -d/ -f2); \
+			upx --best $(BUILD_DIR)/$(APPNAME)-$(VERSION)-$$os-$$arch/*; \
 			tar -C $(BUILD_DIR) -cvzf $(DIST_DIR)/$(APPNAME)-$(VERSION)-$$os-$$arch.tar.gz $(APPNAME)-$(VERSION)-$$os-$$arch; \
 		done; \
 	fi
