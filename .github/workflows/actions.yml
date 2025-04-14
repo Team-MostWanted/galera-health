@@ -22,8 +22,15 @@ jobs:
       id: getversion
       run: echo "version=$(make version)" >> $GITHUB_OUTPUT
 
+    - name: Install UPX
+      run: sudo apt-get update && sudo apt-get install -y upx
+
     - name: Build tar files
       run: make dist
+
+    - name: Compress binaries with UPX
+      run: |
+          upx --best ./dist/*/galera-health
 
     - name: create the release
       uses: softprops/action-gh-release@v1
